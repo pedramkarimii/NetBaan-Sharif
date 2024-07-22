@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "task"
+version = "0.1.0"
+description = "duty to the company NetBaan Sharif (Django,PostgreSQL)"
+authors = ["pedramkarimii <pedram@9060.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+python-decouple = "^3.8"
+django-jazzmin = "^3.0.0"
+psycopg2-binary = "^2.9.9"
+django = "^5.0.7"
+djangorestframework = "^3.15.2"
+gunicorn = "^22.0.0"
+redis = "^5.0.7"
+pytz = "^2024.1"
+pycryptodome = "^3.20.0"
+djangorestframework-simplejwt = "^5.3.1"
+drf-yasg = "^1.21.7"
+drf-spectacular = "^0.27.2"
+model-bakery = "^1.18.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
