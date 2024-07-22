@@ -1,0 +1,41 @@
+services:
+  redis:
+    container_name: redis
+    image: redis:alpine
+    restart: always
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - ./volumes/redis/:/var/lib/redis/data/
+  db:
+    container_name: postgres
+    image: postgres:alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_PORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./volumes/dbnetbaan/:/var/lib/postgresql/data/pgdatanetbaan/
+
+  application:
+    env_file:
+      - ./.env
+    build:
+    context: .
+    dockerfile: utility/Dockerfile
+    restart: always
+    command: >
+      sh -c '
+      python manage.py wait_for_db &&
+      python manage.py wait_for_redis &&
+      ./utility/bin/setup.sh &&
+      gunicorn --bind 0.0.0.0:${API_PORT} config.wsgi:application --log-level ${API_LOG_LEVEL} --access-logfile "logs/backend.logs" --error-logfile "logs/errors.logs"
+      '
+    volumes:
+      - ./logs/application/:/app/logs/
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    depends_on:
+      - db
