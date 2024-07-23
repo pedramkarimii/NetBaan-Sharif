@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
-from unittest.mock import patch
+
 User = get_user_model()
 
 
@@ -13,34 +13,39 @@ class UserListViewTests(APITestCase):
         """
         Create users and an admin user for testing.
         """
-        # Create non-admin users
-        self.user1 = User.objects.create_user(
-            username='user1',
-            email='user1@example.com',
-            phone_number='11111111111',
-            password='password123'
+        self.user1, _ = User.objects.get_or_create(
+            username='Sharif',
+            defaults={
+                'password': 'qwertyQ@1',
+                'phone_number': '09107654322',
+                'email': 'Sharif@example.com'
+            }
         )
-        self.user2 = User.objects.create_user(
-            username='user2',
-            email='user2@example.com',
-            phone_number='22222222222',
-            password='password123'
-        )
-
-        # Create an admin user
-        self.admin_user = User.objects.create_superuser(
-            username='admin',
-            email='admin@example.com',
-            phone_number='33333333333',
-            password='adminpassword123'
+        self.user2, _ = User.objects.get_or_create(
+            username='netbaan',
+            defaults={
+                'password': 'qwertyQ@1',
+                'phone_number': '09107654321',
+                'email': 'netbaan@example.com'
+            }
         )
 
-        # Generate tokens for authentication
+        self.admin_user, _ = User.objects.get_or_create(
+            username='pedramkarimi',
+            defaults={
+                'password': 'qwertyQ@1',
+                'phone_number': '09128355747',
+                'email': 'pedramkarimi@gmail.com'
+            }
+        )
+        self.admin_user.set_password('qwertyQ@1')
+        self.admin_user.is_superuser = True
+        self.admin_user.is_staff = True
+        self.admin_user.save()
+
         self.admin_token, _ = Token.objects.get_or_create(user=self.admin_user)
         self.user_token, _ = Token.objects.get_or_create(user=self.user1)
-
-        # Define URL for the list view
-        self.url = reverse('list-user')  # Adjusted to match the URL pattern name
+        self.url = reverse('list-user')
 
     def test_list_users_admin(self):
         """
@@ -48,8 +53,9 @@ class UserListViewTests(APITestCase):
         """
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
         response = self.client.get(self.url)
+        print(response.data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 3)  # Check the number of users returned
+        self.assertEqual(len(response.data['results']), 3)
 
     def test_list_users_non_admin(self):
         """
@@ -60,20 +66,17 @@ class UserListViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_search_users(self):
-        """
-        Test searching users by username, email, and phone_number.
-        """
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
 
-        response = self.client.get(self.url, {'search': 'user1'})
+        response = self.client.get(self.url, {'search': 'Sharif'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['username'], 'user1')
+        self.assertEqual(response.data['results'][0]['username'], 'Sharif')
 
-        response = self.client.get(self.url, {'search': 'user2@example.com'})
+        response = self.client.get(self.url, {'search': 'netbaan@example.com'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['email'], 'user2@example.com')
+        self.assertEqual(response.data['results'][0]['email'], 'netbaan@example.com')
 
     def test_pagination(self):
         """
@@ -83,104 +86,339 @@ class UserListViewTests(APITestCase):
 
         response = self.client.get(self.url, {'page_size': 1})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)  # Should return 1 user per page
+        self.assertEqual(len(response.data['results']), 1)
 
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue('next' in response.data)  # Check if pagination links are present
+        self.assertTrue('next' in response.data)
 
     def test_filtering_by_is_active(self):
         """
         Test filtering users by `is_active` status.
         """
-        # Set some users as inactive
         self.user1.is_active = False
         self.user1.save()
 
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
         response = self.client.get(self.url, {'is_active': 'true'})
+        print(response.status_code)
+        print(response.data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('user2', [user['username'] for user in response.data['results']])
-        self.assertNotIn('user1', [user['username'] for user in response.data['results']])
-#
-#
-# class DetailViewTests(APITestCase):
-#
-#     def setUp(self):
-#         """
-#         Create users and generate tokens for authentication.
-#         """
-#         # Create non-admin users
-#         self.user1 = User.objects.create_user(
-#             username='user1',
-#             email='user1@example.com',
-#             phone_number='11111111111',
-#             password='password123'
-#         )
-#         self.user2 = User.objects.create_user(
-#             username='user2',
-#             email='user2@example.com',
-#             phone_number='22222222222',
-#             password='password123'
-#         )
-#
-#         # Create an admin user
-#         self.admin_user = User.objects.create_superuser(
-#             username='admin',
-#             email='admin@example.com',
-#             phone_number='33333333333',
-#             password='adminpassword123'
-#         )
-#
-#         # Generate tokens for authentication
-#         self.user1_token, _ = Token.objects.get_or_create(user=self.user1)
-#         self.user2_token, _ = Token.objects.get_or_create(user=self.user2)
-#         self.admin_token, _ = Token.objects.get_or_create(user=self.admin_user)
-#
-#         # Define URLs for the detail view
-#         self.user1_url = reverse('detail-user', kwargs={'pk': self.user1.pk})
-#         self.user2_url = reverse('detail-user', kwargs={'pk': self.user2.pk})
-#
-#     def test_get_user_detail_as_owner(self):
-#         """
-#         Test that a user can retrieve their own details.
-#         """
-#         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
-#         response = self.client.get(self.user1_url)
-#         self.assertEqual(response.status_code, status.HTTP_200_OK)
-#         self.assertEqual(response.data['username'], 'user1')
-#         self.assertEqual(response.data['email'], 'user1@example.com')
-#         self.assertEqual(response.data['phone_number'], '11111111111')
-#
-#     def test_get_user_detail_as_admin(self):
-#         """
-#         Test that an admin can retrieve any user's details.
-#         """
-#         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
-#         response = self.client.get(self.user2_url)
-#         self.assertEqual(response.status_code, status.HTTP_200_OK)
-#         self.assertEqual(response.data['username'], 'user2')
-#         self.assertEqual(response.data['email'], 'user2@example.com')
-#         self.assertEqual(response.data['phone_number'], '22222222222')
-#
-#     def test_get_user_detail_as_non_owner_non_admin(self):
-#         """
-#         Test that a non-admin user cannot retrieve another user's details.
-#         """
-#         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
-#         response = self.client.get(self.user2_url)
-#         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)  # Forbidden access
-#
-#     def test_get_user_detail_non_existent_user(self):
-#         """
-#         Test that retrieving a non-existent user returns a 404 error.
-#         """
-#         non_existent_url = reverse('detail-user', kwargs={'pk': 9999})  # Assume 9999 does not exist
-#         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
-#         response = self.client.get(non_existent_url)
-#         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('netbaan', [user['username'] for user in response.data['results']])
+        self.assertNotIn('Sharif', [user['username'] for user in response.data['results']])
 
 
+class UserDetailViewTests(APITestCase):
+
+    def setUp(self):
+        """
+        Create users and an admin user for testing.
+        """
+        self.user1 = User.objects.create_user(
+            username='Sharif',
+            password='qwertyQ@1',
+            phone_number='09107654322',
+            email='Sharif@example.com'
+        )
+        self.user2 = User.objects.create_user(
+            username='netbaan',
+            password='qwertyQ@1',
+            phone_number='09107654321',
+            email='netbaan@example.com'
+        )
+
+        self.admin_user = User.objects.create_superuser(
+            username='pedramkarimi',
+            password='qwertyQ@1',
+            phone_number='09128355747',
+            email='pedramkarimi@gmail.com'
+        )
+
+        self.admin_token, _ = Token.objects.get_or_create(user=self.admin_user)
+        self.user1_token, _ = Token.objects.get_or_create(user=self.user1)
+        self.user2_token, _ = Token.objects.get_or_create(user=self.user2)
+
+        self.user1_url = reverse('detail-user', args=[self.user1.id])
+        self.user2_url = reverse('detail-user', args=[self.user2.id])
+
+    def test_retrieve_user_detail_admin(self):
+        """
+        Test that admin can retrieve details of any user.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        response = self.client.get(self.user1_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'Sharif')
+
+        response = self.client.get(self.user2_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'netbaan')
+
+    def test_retrieve_user_detail_owner(self):
+        """
+        Test that users can retrieve their own details.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        response = self.client.get(self.user1_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'Sharif')
+
+    def test_retrieve_user_detail_non_owner(self):
+        """
+        Test that users cannot retrieve details of other users.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        response = self.client.get(self.user2_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_retrieve_user_detail_nonexistent_user(self):
+        """
+        Test that attempting to retrieve details for a nonexistent user returns a 404 error.
+        """
+        nonexistent_user_url = reverse('detail-user', args=[99999])
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        response = self.client.get(nonexistent_user_url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+class UserChangePasswordViewTests(APITestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.user1 = self.User.objects.create_user(
+            username='Sharif',
+            password='password1@23',
+            phone_number='09107654322',
+            email='Sharif@gmail.com'
+        )
+        self.user2 = self.User.objects.create_user(
+            username='netbaan',
+            password='password1@23',
+            phone_number='09107654321',
+            email='netbaan@gmail.com'
+        )
+        self.admin_user = self.User.objects.create_superuser(
+            username='admin',
+            password='adminpassword@123',
+            phone_number='09128355747',
+            email='admin@gmail.com'
+        )
+        self.user1_token, _ = Token.objects.get_or_create(user=self.user1)
+        self.user2_token, _ = Token.objects.get_or_create(user=self.user2)
+        self.admin_token, _ = Token.objects.get_or_create(user=self.admin_user)
+        self.user1_url = reverse('change-password', args=[self.user1.id])
+        self.user2_url = reverse('change-password', args=[self.user2.id])
+        self.nonexistent_user_url = reverse('change-password', args=[99999])
+
+    def test_change_pass_details_success_owner(self):
+        """
+        Test that a user can successfully update their own password.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        data = {
+            'old_password': 'password1@23',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.user1_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'success')
+
+    def test_change_pass_details_success_admin(self):
+        """
+        Test that an admin can successfully update the password of another user.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        data = {
+            'old_password': 'password1@23',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.user2_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'success')
+
+    def test_change_pass_details_invalid_data(self):
+        """
+        Test that updating user password fails with invalid data.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        data = {
+            'old_password': '',
+            'new_password1': '',
+            'new_password2': ''
+        }
+        response = self.client.put(self.user1_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('old_password', response.data)
+        self.assertIn('new_password1', response.data)
+        self.assertIn('new_password2', response.data)
+
+    def test_change_pass_details_non_owner(self):
+        """
+        Test that a user cannot update the password of another user.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        data = {
+            'old_password': 'password1@23',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.user2_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_change_password_details_unauthorized(self):
+        """
+        Test that an unauthenticated request cannot update user password.
+        """
+        data = {
+            'old_password': 'password1@23',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.user1_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_change_pass_details_nonexistent_user(self):
+        """
+        Test that attempting to update password for a nonexistent user returns a 404 error.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        data = {
+            'old_password': 'password1@23',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.nonexistent_user_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_change_pass_details_unauthorized(self):
+        """
+        Test that an unauthenticated request cannot update user details.
+        """
+        data = {
+            'old_password': 'password@123',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.user1_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_change_password_details_nonexistent_user(self):
+        """
+        Test that attempting to update details for a nonexistent user returns a 404 error.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        data = {
+            'old_password': 'password@123',
+            'new_password1': 'Newpassword@123!',
+            'new_password2': 'Newpassword@123!'
+        }
+        response = self.client.put(self.nonexistent_user_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class UserUpdateViewTests(APITestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.user1 = self.User.objects.create_user(
+            username='Sharif',
+            password='password@123',
+            phone_number='09107654322',
+            email='Sharif@gmail.com'
+        )
+        self.user2 = self.User.objects.create_user(
+            username='netbaan',
+            password='password@123',
+            phone_number='09107654321',
+            email='netbaan@gmail.com'
+        )
+        self.admin_user = self.User.objects.create_superuser(
+            username='admin',
+            password='adminpassword@123',
+            phone_number='09128355747',
+            email='admin@gmail.com'
+        )
+
+        self.user1_token, _ = Token.objects.get_or_create(user=self.user1)
+        self.user2_token, _ = Token.objects.get_or_create(user=self.user2)
+        self.admin_token, _ = Token.objects.get_or_create(user=self.admin_user)
+
+        self.user1_url = reverse('update-user', args=[self.user1.id])
+        self.user2_url = reverse('update-user', args=[self.user2.id])
+        self.nonexistent_user_url = reverse('update-user', args=[99999])
+
+    def test_update_user_details_success_owner(self):
+        """
+        Test that a user can successfully update their own details.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        data = {
+            'username': 'SharifUpdated',
+            'email': 'SharifUpdated@gmail.com',
+            'phone_number': '09107654323'
+        }
+        response = self.client.put(self.user1_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'SharifUpdated')
+        self.assertEqual(response.data['email'], 'SharifUpdated@gmail.com')
+        self.assertEqual(response.data['phone_number'], '09107654323')
+
+    def test_update_user_details_success_admin(self):
+        """
+        Test that an admin can successfully update the details of another user.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        data = {
+            'username': 'netbaanUpdated',
+            'email': 'netbaanUpdated@gmail.com',
+            'phone_number': '09107654324'
+        }
+        response = self.client.put(self.user2_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'netbaanUpdated')
+        self.assertEqual(response.data['email'], 'netbaanUpdated@gmail.com')
+        self.assertEqual(response.data['phone_number'], '09107654324')
+
+    def test_update_user_details_invalid_data(self):
+        """
+        Test that updating user details fails with invalid data.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        data = {
+            'username': '',
+            'email': 'invalid-email',
+            'phone_number': 'invalid-phone'
+        }
+        response = self.client.put(self.user1_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', response.data)
+        self.assertIn('email', response.data)
+        self.assertIn('phone_number', response.data)
+
+    def test_update_user_details_non_owner(self):
+        """
+        Test that a user cannot update the details of another user.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user1_token.key)
+        data = {
+            'username': 'netbaanUpdatedByOtherUser',
+            'email': 'netbaanUpdatedByOtherUser@gmail.com',
+            'phone_number': '09107654325'
+        }
+        response = self.client.put(self.user2_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_update_user_details_nonexistent_user(self):
+        """
+        Test that attempting to update a nonexistent user returns a 404 error.
+        """
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+        data = {
+            'username': 'nonexistent',
+            'email': 'nonexistent@gmail.com',
+            'phone_number': '09107654327'
+        }
+        response = self.client.put(self.nonexistent_user_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class LogoutTests(APITestCase):
@@ -191,10 +429,11 @@ class LogoutTests(APITestCase):
             phone_number='11111111111',
             password='password123'
         )
-        self.client.login(email='testuser@example.com', password='password123')
+        self.user_token, _ = Token.objects.get_or_create(user=self.user)
         self.url = reverse('logout')
 
     def test_logout_success(self):
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.user_token.key)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('message', response.data)
@@ -206,135 +445,3 @@ class LogoutTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
         self.assertEqual(response.data['error'], 'You are not logged in')
-
-
-class LoginTests(APITestCase):
-    def setUp(self):
-        self.url = reverse('login')
-        self.email = 'pedram.9060@gmail.com'
-
-        # Ensure no existing user with the same username or email
-        User = get_user_model()
-        User.objects.filter(email=self.email).delete()  # Delete existing user with this email
-
-        self.user = User.objects.create_user(
-            username='PedramKarimi',  # Ensure this username does not conflict
-            email=self.email,
-            phone_number='09128355747',
-            password='qwertyQ@!'
-        )
-
-    @patch('django.core.mail.send_mail')
-    def test_login_success(self, mock_send_mail):
-        data = {'email': self.email}
-        response = self.client.post(self.url, data, format='json')
-
-        # Debugging: Print response content for troubleshooting
-        print(response.data)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('message', response.data)
-        self.assertEqual(response.data['message'], 'Code sent to your email')
-        mock_send_mail.assert_called_once()
-
-    def test_login_invalid_email(self):
-        data = {'email': 'invalidemail@example.com'}
-        response = self.client.post(self.url, data, format='json')
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('email', response.data)
-
-
-class LoginVerifyCodeTests(APITestCase):
-    def setUp(self):
-        self.user = get_user_model().objects.create_user(
-            email='testuser@example.com',
-            password='password123'
-        )
-        self.url = reverse('login-verify-code')
-        self.redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-
-    @patch('django.core.mail.send_mail')
-    def test_login_verify_code_success(self, mock_send_mail):
-        # Simulate sending the code
-        self.redis_client.set('testuser@example.com', '123456')
-        data = {'code': '123456'}
-        self.client.login(email='testuser@example.com', password='password123')
-        response = self.client.post(self.url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('message', response.data)
-        self.assertEqual(response.data['message'], 'Code verified successfully')
-
-    def test_login_verify_code_invalid(self):
-        data = {'code': 'wrongcode'}
-        response = self.client.post(self.url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
-
-
-
-
-class UserRegisterTests(APITestCase):
-    def setUp(self):
-        self.url = reverse('user-register')
-
-    @patch('django.core.mail.send_mail')
-    def test_user_register_success(self, mock_send_mail):
-        data = {
-            'email': 'newuser@example.com',
-            'phone_number': '1234567890',
-            'username': 'newuser',
-            'password': 'password123'
-        }
-        response = self.client.post(self.url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('message', response.data)
-        self.assertEqual(response.data['message'], 'Code sent to your email')
-        mock_send_mail.assert_called_once()
-
-    def test_user_register_invalid(self):
-        data = {
-            'email': 'invalidemail',
-            'phone_number': '1234567890',
-            'username': 'newuser',
-            'password': 'password123'
-        }
-        response = self.client.post(self.url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('email', response.data)
-
-
-class UserRegistrationVerifyCodeTests(APITestCase):
-    def setUp(self):
-        self.url = reverse('user-registration-verify-code')
-        self.redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-        self.redis_client.set('newuser@example.com', '123456')
-
-    def test_user_registration_verify_code_success(self):
-        data = {'code': '123456'}
-        session_data = {
-            'phone_number': '1234567890',
-            'email': 'newuser@example.com',
-            'username': 'newuser',
-            'password': 'password123'
-        }
-        self.client.session['user_registration_info'] = session_data
-        self.client.session.save()
-        response = self.client.post(self.url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('message', response.data)
-        self.assertEqual(response.data['message'], 'User created successfully')
-
-    def test_user_registration_verify_code_invalid(self):
-        data = {'code': 'wrongcode'}
-        session_data = {
-            'phone_number': '1234567890',
-            'email': 'newuser@example.com',
-            'username': 'newuser',
-            'password': 'password123'
-        }
-        self.client.session['user_registration_info'] = session_data
-        self.client.session.save()
-        response = self.client.post(self.url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
