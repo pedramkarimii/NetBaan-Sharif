@@ -1,10 +1,14 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 """Define URL patterns for the entire application."""
 urlpatterns = [
     path("", include("apps.account.urls")),
     path("", include("apps.book.urls")),
+    path("schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    path("schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]
 
 """Check if the application is in debug mode."""
