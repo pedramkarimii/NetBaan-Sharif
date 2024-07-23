@@ -2,6 +2,8 @@ import re
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
+from apps.core import validators
+
 User = get_user_model()
 
 
@@ -9,6 +11,24 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating user information.
     """
+    username = serializers.CharField(
+        validators=[validators.UsernameValidator()],
+        required=False
+    )
+    email = serializers.EmailField(
+        validators=[validators.EmailValidator()],
+        required=False
+    )
+    phone_number = serializers.CharField(
+        validators=[validators.PhoneNumberMobileValidator()],
+        required=False
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        validators=[validators.PasswordValidator()]
+    )
+
     class Meta:
         model = User
         fields = ['username', 'email', 'phone_number', 'password']
@@ -18,18 +38,27 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'username': {'required': False},
             'phone_number': {'required': False},
         }
-        validators = [
-            serializers.UniqueTogetherValidator(queryset=User.objects.all(),
-                                                fields=['username', 'email', 'phone_number'])
-        ]
-        error_messages = {
-            'default': 'Bad Request.'
-        }
+
+    def validate(self, data):
+        """
+        Validate the data and return the validated data.
+        """
+        # Check for uniqueness of the data if necessary
+        if 'email' in data and User.objects.filter(email=data['email']).exclude(id=self.instance.id).exists():
+            raise serializers.ValidationError({'email': 'This email is already in use.'})
+        if 'username' in data and User.objects.filter(username=data['username']).exclude(id=self.instance.id).exists():
+            raise serializers.ValidationError({'username': 'This username is already in use.'})
+        if 'phone_number' in data and User.objects.filter(phone_number=data['phone_number']).exclude(
+                id=self.instance.id).exists():
+            raise serializers.ValidationError({'phone_number': 'This phone number is already in use.'})
+        return data
 
     def update(self, instance, validated_data):
         """
         Update the user instance with the validated data.
         """
+        if 'password' in validated_data:
+            instance.set_password(validated_data['password'])
         instance.username = validated_data.get('username', instance.username)
         instance.email = validated_data.get('email', instance.email)
         instance.phone_number = validated_data.get('phone_number', instance.phone_number)
@@ -42,38 +71,26 @@ class ChangePasswordSerializer(serializers.Serializer):
     Serializer for handling password change requests.
     """
     old_password = serializers.CharField(write_only=True)
-    new_password1 = serializers.CharField(write_only=True)
+    new_password1 = serializers.CharField(write_only=True, validators=[validators.PasswordValidator()])
     new_password2 = serializers.CharField(write_only=True)
-    error_messages = {
-        'default': 'Bad Request.'
-    }
 
     def validate(self, data):
         """
-        Validate that the two new password fields match.
+        Validate that the two new password fields match and the new password is different from the old password.
         """
         if data['new_password1'] != data['new_password2']:
             raise serializers.ValidationError({"new_password2": "New passwords don't match"})
+
+        user = self.context['request'].user
+        if user.check_password(data['new_password1']):
+            raise serializers.ValidationError("The new password must be different from the old password.")
+
         return data
 
-    def validate_new_password1(self, value):
-        """
-       Validate the new password to ensure it meets complexity requirements and is different from the old password.
-       """
-        user = self.context['request'].user
-        if user.check_password(value):
-            raise serializers.ValidationError("The new password must be different from the old password.")
-        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$"
-        if not re.match(pattern, value):
-            raise serializers.ValidationError(
-                "Password must contain at least one uppercase letter, one lowercase letter,"
-                " one digit, and one special character."
-            )
-        if ' ' in value:
-            raise serializers.ValidationError("Password cannot contain spaces.")
-        return value
-
     def save(self, **kwargs):
+        """
+        Update the user's password with the new password.
+        """
         user = self.context['request'].user
         user.set_password(self.validated_data['new_password1'])
         user.save()
