@@ -1,11 +1,38 @@
+from django.http import Http404
 from rest_framework import generics, permissions, filters, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from apps.account.serializers import user
 from django.contrib.auth import get_user_model
-from apps.core.permissions import IsOwnerOrAdminPermission
+from rest_framework.permissions import BasePermission
 
 User = get_user_model()
+
+
+class IsOwnerOrAdminPermission(BasePermission):
+    """
+    Custom permission to only allow owners of an object or admin users to view or edit it.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        """
+        Returns `True` if the request user is an admin or the owner of the object.
+        """
+        if request.user.is_authenticated:
+            if request.user.is_superuser:
+                return True
+            return request.user.pk == view.kwargs.get('pk')
+        return False
+
+    def has_permission(self, request, view):
+        """
+        Returns `True` if the request user is an admin.
+        """
+        if request.user.is_authenticated and request.user.pk == view.kwargs.get('pk'):
+            return True
+        if request.user.is_superuser:
+            return True
+        return False
 
 
 class CustomPagination(PageNumberPagination):
@@ -24,7 +51,7 @@ class CustomPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class UserListView(generics.ListAPIView):
+class UserListAPI(generics.ListAPIView):
     """
     API view to list all users with pagination, searching, and ordering.
     This view provides a list of users and supports pagination, searching, and ordering. It requires admin
@@ -63,7 +90,7 @@ class UserListView(generics.ListAPIView):
         return queryset
 
 
-class DetailView(generics.RetrieveAPIView):
+class DetailAPI(generics.RetrieveAPIView):
     """
     API view to retrieve the details of a single user.
     This view provides the ability to retrieve detailed information for a specific user, with access control
@@ -77,10 +104,10 @@ class DetailView(generics.RetrieveAPIView):
     """
     queryset = User.objects.all()
     serializer_class = user.UserDetailSerializer
-    permission_classes = (IsOwnerOrAdminPermission,)
+    permission_classes = [IsOwnerOrAdminPermission]
 
 
-class ChangePasswordView(generics.UpdateAPIView):
+class ChangePasswordAPI(generics.UpdateAPIView):
     """
     API view to allow users to change their password.
     This view handles the process of updating a user's password. It requires the user to provide their old
@@ -88,45 +115,47 @@ class ChangePasswordView(generics.UpdateAPIView):
     can change the password.
     """
     serializer_class = user.ChangePasswordSerializer
-    model = User
     permission_classes = (IsOwnerOrAdminPermission,)
+    model = get_user_model()
 
     def get_object(self, queryset=None):
-        return self.request.user
+        """
+        Retrieve the user object based on the provided primary key (`pk`). If the user does
+        not exist, raise an HTTP 404 exception.
+        Returns:
+            User: The user object if found.
+        Raises:
+            Http404: If the user is not found.
+        """
+        user_id = self.kwargs.get('pk')
+        try:
+            user = self.model.objects.get(pk=user_id)  # noqa
+            return user
+        except self.model.DoesNotExist:
+            raise Http404
 
     def update(self, request, *args, **kwargs):
         """
-        Handles the request to update the user's password.
-
-        - Validates the provided passwords using the serializer.
-        - Checks if the old password is correct.
-        - Sets the new password and saves the user instance if the old password is correct.
-        - Returns a success response if the password is updated successfully, or an error response if validation fails.
-
-        - Parameters:
-            - `request`: The HTTP request containing the old and new passwords.
-            - `args` and `kwargs`: Additional arguments and keyword arguments passed to the method.
-        - Returns: A `Response` object containing the status of the operation.
+        Handle the update request for changing the user's password.
+        Returns:
+            Response: A response indicating the success or failure of the password change operation.
+            If the old password is incorrect, it returns a 400 Bad Request response with an error message.
+            If the update is successful, it returns a 200 OK response with a success message.
+        Raises:
+            Response: If the serializer is invalid, it returns a 400 Bad Request response with the serializer errors.
         """
-        self.object = self.get_object()  # noqa
-        serializer = self.get_serializer(data=request.data)
-
+        user = self.get_object()  # noqa
+        serializer = self.get_serializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            if not self.object.check_password(serializer.data.get("old_password")):
+            if not user.check_password(serializer.validated_data.get("old_password")):
                 return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
-
-            self.object.set_password(serializer.data.get("new_password1"))
-            self.object.save()
-            response = {
-                'status': 'success',
-                'message': 'Password updated successfully',
-            }
-            return Response(response)
-
+            serializer.save()
+            return Response({'status': 'success', 'message': 'Password updated successfully'},
+                            status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserUpdateView(generics.UpdateAPIView):
+class UserUpdateAPI(generics.UpdateAPIView):
     """
     API view to update user details.
     This view allows users to update their own details or an admin to update details of any user.
@@ -138,7 +167,7 @@ class UserUpdateView(generics.UpdateAPIView):
     permission_classes = (IsOwnerOrAdminPermission,)
 
 
-class UserDeleteView(generics.DestroyAPIView):
+class UserDeleteAPI(generics.DestroyAPIView):
     """
     API view to delete a user.
 
