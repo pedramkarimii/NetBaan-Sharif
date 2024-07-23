@@ -1,13 +1,11 @@
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status, response, permissions
+from rest_framework import status, response, views
 from django.db import connection
-
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from apps.account.throttling import CustomRateThrottle
 from apps.book.serializers import book
-from apps.core.mixin.mixin_apiview import CustomAPIViewIsAuthenticatedOrReadOnly
 
 
-class BookList(CustomAPIViewIsAuthenticatedOrReadOnly):
+class BookList(views.APIView):
     """
     API View for listing all books.
 
@@ -15,8 +13,10 @@ class BookList(CustomAPIViewIsAuthenticatedOrReadOnly):
     - Authenticated users to retrieve the list of all books.
     - Read-only access for unauthenticated users.
     """
+    permission_classes = [IsAuthenticatedOrReadOnly]
     throttle_classes = [CustomRateThrottle]
     throttle_scope = 'default'
+    serializer_class = book.BookSerializer
 
     def get(self, request):  # noqa
         """
@@ -37,16 +37,19 @@ class BookList(CustomAPIViewIsAuthenticatedOrReadOnly):
         with connection.cursor() as cursor:
             cursor.execute("SELECT id, title, author, genre FROM books")
             rows = cursor.fetchall()
+
         books = [  # noqa
             {"id": row[0], "title": row[1], "author": row[2], "genre": row[3]}
             for row in rows
         ]
 
-        serializer = book.BookSerializer(books, many=True)
-        return response.Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = self.serializer_class(data=books, many=True)
+        if serializer.is_valid():
+            return response.Response(serializer.data, status=status.HTTP_200_OK)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class BookDetailGenre(CustomAPIViewIsAuthenticatedOrReadOnly):
+class BookDetailGenre(views.APIView):
     """
     API View for listing books based on a specific genre.
 
@@ -54,12 +57,9 @@ class BookDetailGenre(CustomAPIViewIsAuthenticatedOrReadOnly):
     - Authenticated and unauthenticated users to retrieve a list of books filtered by genre.
     - Read-only access to all users.
     """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    serializer_class = book.BookSerializer
 
-    # @swagger_auto_schema(
-    #     operation_description="Retrieve a list of books filtered by genre.",
-    #     manual_parameters=[genre_param],
-    #     responses={200: book.BookSerializer(many=True)},
-    # )
     def get(self, request):  # noqa
         """
         Handles the GET request to retrieve a list of books filtered by genre.
@@ -85,10 +85,14 @@ class BookDetailGenre(CustomAPIViewIsAuthenticatedOrReadOnly):
                 cursor.execute("SELECT id, title, author, genre FROM books WHERE genre = %s", [genre])
                 rows = cursor.fetchall()
 
-            books = [  # noqa
+            books = [ # noqa
                 {"id": row[0], "title": row[1], "author": row[2], "genre": row[3]}
                 for row in rows
             ]
-            serializer = book.BookSerializer(books, many=True)
-            return response.Response(serializer.data, status=status.HTTP_200_OK)
+
+            serializer = self.serializer_class(data=books, many=True)
+            if serializer.is_valid():
+                return response.Response(serializer.data, status=status.HTTP_200_OK)
+            return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         return response.Response({"error": "Genre query parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
