@@ -1,10 +1,11 @@
 from django.db import connection, transaction
-from rest_framework import status, response
-from apps.core.mixin.mixin_apiview import CustomAPIViewIsAuthenticated
-from apps.book.serializers.score import ScoreSerializer
+from rest_framework import status, response, views
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.permissions import IsAuthenticated
+from apps.book.serializers import score
 
 
-class ScoreDelete(CustomAPIViewIsAuthenticated):
+class ScoreDelete(views.APIView):
     """
     API View for deleting a user's review for a specific book.
 
@@ -13,6 +14,8 @@ class ScoreDelete(CustomAPIViewIsAuthenticated):
     - The user is authenticated before allowing the deletion.
     - The review to be deleted exists.
     """
+    permission_classes = [IsAuthenticated]
+    serializer_class = score.ScoreSerializer
 
     def delete(self, request, book_id):  # noqa
         """
@@ -31,34 +34,44 @@ class ScoreDelete(CustomAPIViewIsAuthenticated):
         Returns:
         Response: A response object with a success message or an error message.
         """
+
         user_id = request.user.id
 
         if user_id is None:
-            return response.Response({"error": "User not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
+            raise PermissionDenied("User not authenticated")
 
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT COUNT(*) FROM reviews WHERE book_id = %s AND account_user_id = %s",
-                    [book_id, user_id]
-                )
-                exists = cursor.fetchone()[0]
+        serializer = self.serializer_class(data=request.data)
 
-                if not exists:
-                    return response.Response({"error": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
+        if serializer.is_valid():
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM reviews WHERE book_id = %s AND account_user_id = %s",
+                        [book_id, user_id]
+                    )
+                    exists = cursor.fetchone()[0]
 
-                cursor.execute(
-                    "DELETE FROM reviews WHERE book_id = %s AND account_user_id = %s",
-                    [book_id, user_id]
-                )
-            transaction.commit()
-            return response.Response({"message": "Rating deleted successfully"}, status=status.HTTP_200_OK)
-        except Exception as e:
-            transaction.rollback()
-            return response.Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    if not exists:
+                        raise NotFound("Review not found")
+
+                    cursor.execute(
+                        "DELETE FROM reviews WHERE book_id = %s AND account_user_id = %s",
+                        [book_id, user_id]
+                    )
+                transaction.commit()
+                return response.Response({"message": "Rating deleted successfully"}, status=status.HTTP_200_OK)
+            except NotFound as e:
+                raise e
+            except PermissionDenied as e:
+                raise e
+            except Exception as e:
+                transaction.rollback()
+                return response.Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ScoreUpdate(CustomAPIViewIsAuthenticated):
+class ScoreUpdate(views.APIView):
     """
     API View for updating a user's review for a specific book.
 
@@ -67,6 +80,8 @@ class ScoreUpdate(CustomAPIViewIsAuthenticated):
     - The user is authenticated before allowing the update.
     - The review to be updated exists.
     """
+    permission_classes = [IsAuthenticated]
+    serializer_class = score.ScoreSerializer
 
     def put(self, request, book_id):  # noqa
         """
@@ -86,7 +101,7 @@ class ScoreUpdate(CustomAPIViewIsAuthenticated):
         Returns:
             Response: A response object with a success message or an error message.
         """
-        serializer = ScoreSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             rating = serializer.validated_data['rating']
             user_id = request.user.id
@@ -116,7 +131,7 @@ class ScoreUpdate(CustomAPIViewIsAuthenticated):
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ScoreAdd(CustomAPIViewIsAuthenticated):
+class ScoreAdd(views.APIView):
     """
     API View for managing book reviews and generating book recommendations.
 
@@ -125,6 +140,8 @@ class ScoreAdd(CustomAPIViewIsAuthenticated):
     - Generating recommendations based on user reviews and similar users' preferences.
     It ensures that the user is authenticated before allowing the review to be added.
     """
+    permission_classes = [IsAuthenticated]
+    serializer_class = score.ScoreSerializer
 
     def post(self, request, book_id):
         """
@@ -144,7 +161,7 @@ class ScoreAdd(CustomAPIViewIsAuthenticated):
         Returns:
             Response: A response object with a success message and book recommendations, or an error message.
         """
-        serializer = ScoreSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             rating = serializer.validated_data['rating']
             user_id = request.user.id
