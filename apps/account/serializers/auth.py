@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from apps.core import validators
 
 User = get_user_model()
 
@@ -25,8 +26,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     """
     Serializer for user registration.
     """
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, validators=[validators.PasswordValidator()])
     password2 = serializers.CharField(write_only=True)
+    phone_number = serializers.CharField(validators=[validators.PhoneNumberMobileValidator()])
+    email = serializers.EmailField(validators=[validators.EmailValidator()])
+    username = serializers.CharField(validators=[validators.UsernameValidator()])
 
     class Meta:
         model = User
@@ -40,9 +44,30 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         """
         Validate that the two passwords match.
         """
-        if data['password'] != data['password2']:
+        password = data.get('password')
+        password2 = data.get('password2')
+
+        if password != password2:
             raise serializers.ValidationError("Passwords do not match.")
+
+        # Ensure the password meets complexity requirements
+        password_validator = validators.PasswordValidator()
+        try:
+            password_validator(password)
+        except serializers.ValidationError as e:
+            raise serializers.ValidationError({"password": e.detail})
+
         return data
+
+    def create(self, validated_data):
+        """
+        Create and return a new user instance, setting the password.
+        """
+        password = validated_data.pop('password')
+        user = User.objects.create(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
 
 
 class LoginSerializer(serializers.Serializer):
