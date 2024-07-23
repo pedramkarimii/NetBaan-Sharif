@@ -58,6 +58,7 @@ class Login(views.APIView):
     """
     throttle_classes = [CustomRateThrottle]
     throttle_scope = 'default'
+    serializer_class = auth.LoginSerializer
 
     def post(self, request):  # noqa
         """
@@ -93,6 +94,7 @@ class LoginVerifyCode(views.APIView):
     and ensuring that the user is authenticated. If valid, it logs the user in and updates
     authentication tokens.
     """
+    serializer_class = auth.VerifyCodeSerializer
 
     def post(self, request):  # noqa
         """
@@ -212,6 +214,7 @@ class UserRegistrationVerifyCode(views.APIView):
        - get: Returns a message prompting the user to enter their OTP code.
        - post: Handles the verification of the OTP code and completes the user registration.
     """
+    serializer_class = auth.VerifyCodeSerializer
 
     def post(self, request):  # noqa
         """
